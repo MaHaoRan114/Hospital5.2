@@ -1,0 +1,241 @@
+void ConsultMainWindow::setupUI()
+{
+    // ==================== 1. 创建中央部件和主布局 ====================
+    // 创建中央部件，所有界面元素都放在这里
+    QWidget *centralWidget = new QWidget(this);
+    setCentralWidget(centralWidget);
+    
+    // 创建主水平布局，左右两部分
+    QHBoxLayout *mainLayout = new QHBoxLayout(centralWidget);
+    mainLayout->setContentsMargins(0, 0, 0, 0);  // 设置外边距为0
+    
+    // ==================== 2. 创建分割器 ====================
+    // 分割器用于左右两部分可以拖动调整大小
+    m_mainSplitter = new QSplitter(Qt::Horizontal, centralWidget);
+    mainLayout->addWidget(m_mainSplitter);
+    
+    // ==================== 3. 左侧面板 ====================
+    m_leftPanel = new QWidget();
+    m_leftPanel->setMinimumWidth(450);   // 最小宽度
+    m_leftPanel->setMaximumWidth(550);    // 最大宽度
+    
+    // 左侧面板采用垂直布局
+    QVBoxLayout *leftLayout = new QVBoxLayout(m_leftPanel);
+    leftLayout->setContentsMargins(5, 5, 5, 5);  // 内边距
+    leftLayout->setSpacing(5);                    // 控件间距
+    
+    // -------------------- 3.1 搜索和筛选区域 --------------------
+    QHBoxLayout *searchLayout = new QHBoxLayout();
+    
+    // 搜索输入框
+    m_searchEdit = new QLineEdit();
+    m_searchEdit->setPlaceholderText("搜索患者姓名、就诊卡号...");
+    m_searchEdit->setMinimumHeight(35);  // 设置高度
+    
+    // 状态筛选下拉框
+    m_stateFilter = new QComboBox();
+    m_stateFilter->addItem("全部状态", "");      // 显示文本，隐藏值
+    m_stateFilter->addItem("新申请", "1");
+    m_stateFilter->addItem("接收中", "2");
+    m_stateFilter->addItem("已结束", "3");
+    m_stateFilter->setMinimumHeight(35);
+    m_stateFilter->setMinimumWidth(100);
+    
+    // 刷新按钮
+    m_refreshBtn = new QPushButton("刷新");
+    m_refreshBtn->setMinimumHeight(35);
+    m_refreshBtn->setMinimumWidth(60);
+    // 设置按钮样式
+    m_refreshBtn->setStyleSheet(
+        "QPushButton {"
+        "   background-color: #2196F3;"  // 蓝色背景
+        "   color: white;"                // 白色文字
+        "   border: none;"                 // 无边框
+        "   border-radius: 3px;"           // 圆角
+        "}"
+        "QPushButton:hover {"               // 鼠标悬停效果
+        "   background-color: #1976D2;"
+        "}"
+    );
+    
+    // 将搜索框、下拉框、按钮添加到水平布局
+    searchLayout->addWidget(m_searchEdit);
+    searchLayout->addWidget(m_stateFilter);
+    searchLayout->addWidget(m_refreshBtn);
+    
+    // 将搜索区域添加到左侧面板
+    leftLayout->addLayout(searchLayout);
+    
+    // -------------------- 3.2 咨询记录表格 --------------------
+    m_consultTable = new QTableWidget();
+    m_consultTable->setColumnCount(6);  // 设置6列
+    
+    // 设置表头
+    QStringList headers;
+    headers << "就诊时间" << "患者姓名" << "就诊卡号" << "状态" << "金额" << "订单号";
+    m_consultTable->setHorizontalHeaderLabels(headers);
+    
+    // 表格属性设置
+    m_consultTable->setSelectionBehavior(QAbstractItemView::SelectRows);     // 选择整行
+    m_consultTable->setSelectionMode(QAbstractItemView::SingleSelection);     // 单选
+    m_consultTable->setEditTriggers(QAbstractItemView::NoEditTriggers);      // 不可编辑
+    m_consultTable->setAlternatingRowColors(true);                           // 交替行颜色
+    
+    // 表头属性设置
+    m_consultTable->horizontalHeader()->setStretchLastSection(true);         // 最后一列自动拉伸
+    
+    // 设置列宽
+    m_consultTable->setColumnWidth(0, 150);  // 就诊时间列宽150
+    m_consultTable->setColumnWidth(1, 80);   // 患者姓名列宽80
+    m_consultTable->setColumnWidth(2, 100);  // 就诊卡号列宽100
+    m_consultTable->setColumnWidth(3, 70);   // 状态列宽70
+    m_consultTable->setColumnWidth(4, 70);   // 金额列宽70
+    m_consultTable->setColumnHidden(5, true); // 订单号列隐藏（用于存储数据，不显示）
+    
+    // 将表格添加到左侧面板
+    leftLayout->addWidget(m_consultTable);
+    
+    // ==================== 4. 右侧面板 ====================
+    m_rightPanel = new QWidget();
+    
+    // 右侧面板采用垂直布局
+    QVBoxLayout *rightLayout = new QVBoxLayout(m_rightPanel);
+    rightLayout->setContentsMargins(5, 5, 5, 5);
+    rightLayout->setSpacing(5);
+    
+    // -------------------- 4.1 患者信息区域 --------------------
+    m_patientInfoGroup = new QGroupBox("患者信息");  // 带标题的分组框
+    QGridLayout *infoLayout = new QGridLayout(m_patientInfoGroup);  // 网格布局
+    
+    // 第一行：姓名、年龄、性别
+    infoLayout->addWidget(new QLabel("姓名:"), 0, 0);
+    m_patientNameLabel = new QLabel("-");
+    infoLayout->addWidget(m_patientNameLabel, 0, 1);
+    
+    infoLayout->addWidget(new QLabel("年龄:"), 0, 2);
+    m_patientAgeLabel = new QLabel("-");
+    infoLayout->addWidget(m_patientAgeLabel, 0, 3);
+    
+    infoLayout->addWidget(new QLabel("性别:"), 0, 4);
+    m_patientSexLabel = new QLabel("-");
+    infoLayout->addWidget(m_patientSexLabel, 0, 5);
+    
+    // 第二行：就诊卡号、咨询状态
+    infoLayout->addWidget(new QLabel("就诊卡号:"), 1, 0);
+    m_patientCardLabel = new QLabel("-");
+    infoLayout->addWidget(m_patientCardLabel, 1, 1, 1, 2);  // 占2列
+    
+    infoLayout->addWidget(new QLabel("咨询状态:"), 1, 3);
+    m_consultStateLabel = new QLabel("-");
+    infoLayout->addWidget(m_consultStateLabel, 1, 4, 1, 2);  // 占2列
+    
+    // 第三行：支付金额、就诊时间
+    infoLayout->addWidget(new QLabel("支付金额:"), 2, 0);
+    m_chargeLabel = new QLabel("-");
+    infoLayout->addWidget(m_chargeLabel, 2, 1);
+    
+    infoLayout->addWidget(new QLabel("就诊时间:"), 2, 2);
+    m_orderDateLabel = new QLabel("-");
+    infoLayout->addWidget(m_orderDateLabel, 2, 3, 1, 3);  // 占3列
+    
+    // 将患者信息分组框添加到右侧面板
+    rightLayout->addWidget(m_patientInfoGroup);
+    
+    // -------------------- 4.2 消息区域 --------------------
+    m_messageGroup = new QGroupBox("咨询内容");
+    QVBoxLayout *messageLayout = new QVBoxLayout(m_messageGroup);
+    
+    // 消息列表
+    m_messageList = new QListWidget();
+    m_messageList->setWordWrap(true);           // 文字自动换行
+    m_messageList->setSpacing(5);               // 消息间距
+    messageLayout->addWidget(m_messageList);
+    
+    // 输入区域水平布局
+    QHBoxLayout *inputLayout = new QHBoxLayout();
+    
+    // 消息输入框
+    m_messageInput = new QTextEdit();
+    m_messageInput->setPlaceholderText("输入回复内容...");
+    m_messageInput->setMaximumHeight(60);       // 最大高度
+    m_messageInput->setEnabled(true);           // 默认启用
+    
+    // 发送按钮
+    m_sendBtn = new QPushButton("发送");
+    m_sendBtn->setMinimumWidth(70);
+    m_sendBtn->setMinimumHeight(35);
+    m_sendBtn->setEnabled(true);
+    m_sendBtn->setStyleSheet(
+        "QPushButton {"
+        "   background-color: #07C160;"  // 绿色
+        "   color: white;"
+        "   border: none;"
+        "   border-radius: 3px;"
+        "}"
+        "QPushButton:hover {"
+        "   background-color: #06ae54;"
+        "}"
+        "QPushButton:disabled {"           // 禁用状态样式
+        "   background-color: #cccccc;"
+        "}"
+    );
+    
+    // 更多操作按钮
+    m_moreBtn = new QPushButton("更多操作");
+    m_moreBtn->setMinimumWidth(80);
+    m_moreBtn->setMinimumHeight(35);
+    m_moreBtn->setEnabled(true);
+    m_moreBtn->setStyleSheet(
+        "QPushButton {"
+        "   background-color: #FF9800;"  // 橙色
+        "   color: white;"
+        "   border: none;"
+        "   border-radius: 3px;"
+        "}"
+        "QPushButton:hover {"
+        "   background-color: #F57C00;"
+        "}"
+        "QPushButton:disabled {"
+        "   background-color: #cccccc;"
+        "}"
+    );
+    
+    // 将输入框和按钮添加到水平布局
+    inputLayout->addWidget(m_messageInput);
+    inputLayout->addWidget(m_sendBtn);
+    inputLayout->addWidget(m_moreBtn);
+    
+    // 将输入区域布局添加到消息布局
+    messageLayout->addLayout(inputLayout);
+    
+    // 将消息分组框添加到右侧面板
+    rightLayout->addWidget(m_messageGroup);
+    
+    // ==================== 5. 将左右面板添加到分割器 ====================
+    m_mainSplitter->addWidget(m_leftPanel);
+    m_mainSplitter->addWidget(m_rightPanel);
+    
+    // 设置分割器初始比例（左500，右600）
+    m_mainSplitter->setSizes(QList<int>() << 500 << 600);
+    
+    // ==================== 6. 设置状态栏 ====================
+    statusBar()->showMessage("就绪");
+}
+
+
+
+组件	                                      对象名	                         作用
+搜索框	                            m_searchEdit	            搜索患者姓名或就诊卡号
+状态筛选	                            m_stateFilter	            按咨询状态筛选列表
+刷新按钮	                            m_refreshBtn	            刷新咨询记录
+咨询表格	                            m_consultTable	            显示所有咨询记录
+患者信息组	                    m_patientInfoGroup	    显示当前选中患者信息
+消息列表	                            m_messageList	            显示聊天记录
+消息输入	                            m_messageInput	    输入回复内容
+发送按钮	                            m_sendBtn	                    发送消息
+更多操作	                            m_moreBtn	            显示操作菜单（黑名单、结束等）
+
+
+
+
+
