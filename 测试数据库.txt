@@ -1,147 +1,201 @@
--- 创建业务数据库
-DROP DATABASE IF EXISTS business_db;
-CREATE DATABASE IF NOT EXISTS business_db;
-USE business_db;
+-- ==================== 使用 JKDB 数据库 ====================
+USE JKDB;
+GO
 
+-- ==================== 删除已存在的表（按依赖顺序） ====================
+IF EXISTS (SELECT * FROM sys.objects WHERE name = 'blacklist' AND type = 'U')
+    DROP TABLE blacklist;
+IF EXISTS (SELECT * FROM sys.objects WHERE name = 'clinic_orders' AND type = 'U')
+    DROP TABLE clinic_orders;
+IF EXISTS (SELECT * FROM sys.objects WHERE name = 'clinic_master' AND type = 'U')
+    DROP TABLE clinic_master;
+IF EXISTS (SELECT * FROM sys.objects WHERE name = 'patient' AND type = 'U')
+    DROP TABLE patient;
+IF EXISTS (SELECT * FROM sys.objects WHERE name = 'users' AND type = 'U')
+    DROP TABLE users;
+GO
 
--- 2.1 用户表(users) - 对应PDF表2.1
-CREATE TABLE IF NOT EXISTS users (
-    user_id VARCHAR(20) NOT NULL PRIMARY KEY COMMENT '用户ID',
-    his_num VARCHAR(20) NOT NULL COMMENT 'HIS代码',
-    username VARCHAR(20) NOT NULL COMMENT '医生姓名',
-    password VARCHAR(10) COMMENT '密码',
-    dept_name VARCHAR(20) COMMENT '所属科室',
-    title VARCHAR(20) COMMENT '职称',
-    speciality VARCHAR(255) COMMENT '擅长',
-    introduce VARCHAR(255) COMMENT '简介',
-    online_time DATETIME COMMENT '上线时间',
-    collection INT DEFAULT 0 COMMENT '收藏数',
-    consultation INT DEFAULT 0 COMMENT '咨询数',
-    drug_flag CHAR(2) COMMENT '是否线上处方',
-    lab_flag CHAR(2) COMMENT '是否线上检验',
-    exam_flag CHAR(2) COMMENT '是否线上检查',
-    CA_flag CHAR(2) COMMENT '是否CA认证',
-    message_way CHAR(2) COMMENT '消息推送方式',
-    examine_flag CHAR(2) DEFAULT '1' COMMENT '审核标识：1通过，0不通过',
-    examine_oper VARCHAR(10) COMMENT '审核人员',
-    -- 为username创建索引，用于外键引用
-    INDEX idx_username (username)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='用户表';
+-- ==================== 1. 用户表(users) ====================
+CREATE TABLE users (
+    user_id VARCHAR(20) NOT NULL PRIMARY KEY,
+    his_num VARCHAR(20) NOT NULL,
+    username VARCHAR(20) NOT NULL UNIQUE,  -- UNIQUE 约束，供外键引用
+    password VARCHAR(10) NULL,
+    dept_name VARCHAR(20) NULL,
+    title VARCHAR(20) NULL,
+    speciality VARCHAR(255) NULL,
+    introduce VARCHAR(255) NULL,
+    online_time DATETIME NULL,
+    collection INT DEFAULT 0,
+    consultation INT DEFAULT 0,
+    drug_flag CHAR(2) NULL,
+    lab_flag CHAR(2) NULL,
+    exam_flag CHAR(2) NULL,
+    CA_flag CHAR(2) NULL,
+    message_way CHAR(2) NULL,
+    examine_flag CHAR(2) DEFAULT '1',
+    examine_oper VARCHAR(10) NULL
+);
+GO
 
--- 2.3 患者表(patient) - 对应PDF表2.3
-CREATE TABLE IF NOT EXISTS patient (
-    patient_id VARCHAR(20) NOT NULL PRIMARY KEY COMMENT '患者ID',
-    patient_card VARCHAR(20) COMMENT '就诊卡号',
-    patient_name VARCHAR(20) NOT NULL COMMENT '患者姓名',
-    patient_age INT COMMENT '患者年龄',
-    patient_sex CHAR(2) COMMENT '性别：男1，女2',
-    patient_mobile VARCHAR(11) COMMENT '手机号',
-    patient_address VARCHAR(255) COMMENT '地址',
-    enable_flag CHAR(1) NOT NULL DEFAULT '1' COMMENT '启用状态：0禁用，1启用',
-    create_time DATETIME NOT NULL COMMENT '创建时间',
-    -- 为patient_name创建索引
-    INDEX idx_patient_name (patient_name)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='患者表';
+CREATE INDEX idx_users_username ON users(username);
+GO
 
+-- ==================== 2. 患者表(patient) ====================
+CREATE TABLE patient (
+    patient_id VARCHAR(20) NOT NULL PRIMARY KEY,
+    patient_card VARCHAR(20) NULL,
+    patient_name VARCHAR(20) NOT NULL,
+    patient_age INT NULL,
+    patient_sex CHAR(2) NULL,
+    patient_mobile VARCHAR(11) NULL,
+    patient_address VARCHAR(255) NULL,
+    enable_flag CHAR(1) NOT NULL DEFAULT '1',
+    create_time DATETIME NOT NULL
+);
+GO
 
--- 2.6 问诊记录主表(clinic_master) - 对应PDF表2.6
-CREATE TABLE IF NOT EXISTS clinic_master (
-    clinic_id VARCHAR(20) NOT NULL PRIMARY KEY COMMENT '问诊序号',
-    clinic_date DATETIME NOT NULL COMMENT '问诊日期',
-    patient_id VARCHAR(20) NOT NULL COMMENT '患者ID',
-    patient_name VARCHAR(20) NOT NULL COMMENT '患者姓名',
-    patient_age INT COMMENT '患者年龄',
-    patient_sex CHAR(8) COMMENT '患者性别',
-    username VARCHAR(20) NOT NULL COMMENT '问诊医生',
-    type_code CHAR(2) COMMENT '问诊方式：1图文，2电话，3视频',
-    clinic_type VARCHAR(20) COMMENT '问诊方式表号类',
-    -- 创建索引
-    INDEX idx_patient_id (patient_id),
-    INDEX idx_username (username),
-    INDEX idx_clinic_date (clinic_date),
-    -- 外键约束
-    CONSTRAINT fk_master_patient FOREIGN KEY (patient_id) REFERENCES patient(patient_id),
-    CONSTRAINT fk_master_user FOREIGN KEY (username) REFERENCES users(username)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='问诊记录主表';
+CREATE INDEX idx_patient_name ON patient(patient_name);
+GO
 
--- 2.7 门诊医嘱主记录表(clinic_orders) - 对应PDF表2.7
-CREATE TABLE IF NOT EXISTS clinic_orders (
-    order_id VARCHAR(20) NOT NULL PRIMARY KEY COMMENT '门诊序号',
-    clinic_id VARCHAR(20) NOT NULL COMMENT '问诊序号',
-    serial_no VARCHAR(10) NOT NULL UNIQUE COMMENT '流水号',
-    patient_name VARCHAR(20) NOT NULL COMMENT '患者姓名',
-    patient_card VARCHAR(20) COMMENT '就诊卡号',
-    visit_date DATETIME COMMENT '就诊日期',
-    order_info VARCHAR(255) COMMENT '医嘱建议',
-    dept_name VARCHAR(20) COMMENT '开单科室',
-    username VARCHAR(20) NOT NULL COMMENT '开单医生',
-    order_date DATETIME COMMENT '开单日期',
-    charge DECIMAL(10,4) COMMENT '支付金额',
-    pass_flag CHAR(2) DEFAULT '1' COMMENT '咨询是否有效：1有效，0无效',
-    invalid_reason VARCHAR(100) COMMENT '无效原因',
-    reply_date INT COMMENT '医生回复时长(分钟)',
-    clinic_state CHAR(8) DEFAULT '1' COMMENT '状态：1新申请，2接收，3结束',
-    cancel_flag CHAR(1) DEFAULT '0' COMMENT '取消标记：0未取消，1已取消',
-    cancel_reason VARCHAR(255) COMMENT '取消原因',
-    cancel_time DATETIME COMMENT '取消时间',
-    -- 创建索引
-    INDEX idx_clinic_id (clinic_id),
-    INDEX idx_username (username),
-    INDEX idx_serial_no (serial_no),
-    INDEX idx_clinic_state (clinic_state),
-    INDEX idx_pass_flag (pass_flag),
-    -- 外键约束
-    CONSTRAINT fk_orders_master FOREIGN KEY (clinic_id) REFERENCES clinic_master(clinic_id),
-    CONSTRAINT fk_orders_user FOREIGN KEY (username) REFERENCES users(username)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='门诊医嘱主记录表';
+-- ==================== 3. 问诊记录主表(clinic_master) ====================
+CREATE TABLE clinic_master (
+    clinic_id VARCHAR(20) NOT NULL PRIMARY KEY,
+    clinic_date DATETIME NOT NULL,
+    patient_id VARCHAR(20) NOT NULL,
+    patient_name VARCHAR(20) NOT NULL,
+    patient_age INT NULL,
+    patient_sex CHAR(8) NULL,
+    username VARCHAR(20) NOT NULL,
+    type_code CHAR(2) NULL,
+    clinic_type VARCHAR(20) NULL
+);
+GO
 
--- 2.14 黑名单表(blacklist) - 对应PDF表2.14
-CREATE TABLE IF NOT EXISTS blacklist (
-    black_id VARCHAR(20) NOT NULL PRIMARY KEY COMMENT '序号',
-    user_id VARCHAR(20) NOT NULL COMMENT '用户ID(医生)',
-    patient_id VARCHAR(20) NOT NULL COMMENT '患者ID',
-    reason VARCHAR(255) COMMENT '加入原因',
-    create_time DATETIME NOT NULL COMMENT '创建时间',
-    enable_flag CHAR(1) NOT NULL DEFAULT '0' COMMENT '解除标记：0未解除，1已解除',
-    -- 创建索引
-    INDEX idx_user_id (user_id),
-    INDEX idx_patient_id (patient_id),
-    INDEX idx_enable_flag (enable_flag),
-    -- 外键约束
-    CONSTRAINT fk_blacklist_user FOREIGN KEY (user_id) REFERENCES users(user_id),
-    CONSTRAINT fk_blacklist_patient FOREIGN KEY (patient_id) REFERENCES patient(patient_id)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='黑名单表';
+CREATE INDEX idx_master_patient_id ON clinic_master(patient_id);
+CREATE INDEX idx_master_username ON clinic_master(username);
+GO
+
+-- 外键约束
+ALTER TABLE clinic_master ADD CONSTRAINT fk_master_patient 
+    FOREIGN KEY (patient_id) REFERENCES patient(patient_id);
+ALTER TABLE clinic_master ADD CONSTRAINT fk_master_user 
+    FOREIGN KEY (username) REFERENCES users(username);
+GO
+
+-- ==================== 4. 门诊医嘱主记录表(clinic_orders) ====================
+CREATE TABLE clinic_orders (
+    order_id VARCHAR(20) NOT NULL PRIMARY KEY,
+    clinic_id VARCHAR(20) NOT NULL,
+    serial_no VARCHAR(10) NOT NULL UNIQUE,
+    patient_name VARCHAR(20) NOT NULL,
+    patient_card VARCHAR(20) NULL,
+    visit_date DATETIME NULL,
+    order_info VARCHAR(255) NULL,
+    dept_name VARCHAR(20) NULL,
+    username VARCHAR(20) NOT NULL,
+    order_date DATETIME NULL,
+    charge DECIMAL(10,4) NULL,
+    pass_flag CHAR(2) DEFAULT '1',
+    invalid_reason VARCHAR(100) NULL,
+    reply_date INT NULL,
+    clinic_state CHAR(8) DEFAULT '1',
+    cancel_flag CHAR(1) DEFAULT '0',
+    cancel_reason VARCHAR(255) NULL,
+    cancel_time DATETIME NULL
+);
+GO
+
+CREATE INDEX idx_orders_clinic_id ON clinic_orders(clinic_id);
+CREATE INDEX idx_orders_username ON clinic_orders(username);
+CREATE INDEX idx_orders_serial_no ON clinic_orders(serial_no);
+GO
+
+ALTER TABLE clinic_orders ADD CONSTRAINT fk_orders_master 
+    FOREIGN KEY (clinic_id) REFERENCES clinic_master(clinic_id);
+ALTER TABLE clinic_orders ADD CONSTRAINT fk_orders_user 
+    FOREIGN KEY (username) REFERENCES users(username);
+GO
+
+-- ==================== 5. 黑名单表(blacklist) ====================
+CREATE TABLE blacklist (
+    black_id VARCHAR(20) NOT NULL PRIMARY KEY,
+    user_id VARCHAR(20) NOT NULL,
+    patient_id VARCHAR(20) NOT NULL,
+    reason VARCHAR(255) NULL,
+    create_time DATETIME NOT NULL,
+    enable_flag CHAR(1) NOT NULL DEFAULT '0'
+);
+GO
+
+CREATE INDEX idx_blacklist_user_id ON blacklist(user_id);
+CREATE INDEX idx_blacklist_patient_id ON blacklist(patient_id);
+GO
+
+ALTER TABLE blacklist ADD CONSTRAINT fk_blacklist_user 
+    FOREIGN KEY (user_id) REFERENCES users(user_id);
+ALTER TABLE blacklist ADD CONSTRAINT fk_blacklist_patient 
+    FOREIGN KEY (patient_id) REFERENCES patient(patient_id);
+GO
 
 -- ==================== 插入测试数据 ====================
 
--- 插入医生测试数据
+-- 插入医生数据
 INSERT INTO users (user_id, his_num, username, dept_name, title, speciality, examine_flag) VALUES
 ('DOC001', 'HIS001', '张医生', '内科', '主治医师', '内科常见病诊断与治疗', '1'),
 ('DOC002', 'HIS002', '李医生', '儿科', '副主任医师', '儿科疾病诊疗', '1'),
 ('DOC003', 'HIS003', '王医生', '妇科', '主任医师', '妇科常见病、围产期保健', '1');
+GO
 
--- 插入患者测试数据
+-- 插入患者数据
 INSERT INTO patient (patient_id, patient_card, patient_name, patient_age, patient_sex, patient_mobile, enable_flag, create_time) VALUES
-('PAT001', 'CARD001', '张三', 35, '1', '13800138001', '1', NOW()),
-('PAT002', 'CARD002', '李四', 28, '2', '13800138002', '1', NOW()),
-('PAT003', 'CARD003', '王五', 42, '1', '13800138003', '1', NOW()),
-('PAT004', 'CARD004', '赵六', 31, '2', '13800138004', '1', NOW());
+('PAT001', 'CARD001', '张三', 35, '1', '13800138001', '1', GETDATE()),
+('PAT002', 'CARD002', '李四', 28, '2', '13800138002', '1', GETDATE()),
+('PAT003', 'CARD003', '王五', 42, '1', '13800138003', '1', GETDATE()),
+('PAT004', 'CARD004', '赵六', 31, '2', '13800138004', '1', GETDATE());
+GO
 
--- 插入问诊记录测试数据
+-- 插入问诊记录
 INSERT INTO clinic_master (clinic_id, clinic_date, patient_id, patient_name, patient_age, patient_sex, username, type_code) VALUES
-('CLI001', NOW(), 'PAT001', '张三', 35, '1', '张医生', '1'),
-('CLI002', NOW(), 'PAT002', '李四', 28, '2', '李医生', '2'),
-('CLI003', DATE_SUB(NOW(), INTERVAL 1 DAY), 'PAT003', '王五', 42, '1', '王医生', '1'),
-('CLI004', DATE_SUB(NOW(), INTERVAL 2 DAY), 'PAT004', '赵六', 31, '2', '张医生', '3');
+('CLI001', GETDATE(), 'PAT001', '张三', 35, '1', '张医生', '1'),
+('CLI002', GETDATE(), 'PAT002', '李四', 28, '2', '李医生', '2'),
+('CLI003', DATEADD(DAY, -1, GETDATE()), 'PAT003', '王五', 42, '1', '王医生', '1'),
+('CLI004', DATEADD(DAY, -2, GETDATE()), 'PAT004', '赵六', 31, '2', '张医生', '3');
+GO
 
--- 插入医嘱记录测试数据（包含结束和无效状态）
+-- 插入医嘱记录
 INSERT INTO clinic_orders (order_id, clinic_id, serial_no, patient_name, patient_card, dept_name, username, charge, pass_flag, invalid_reason, reply_date, clinic_state) VALUES
 ('ORD001', 'CLI001', 'SN001', '张三', 'CARD001', '内科', '张医生', 100.00, '1', NULL, 15, '3'),
 ('ORD002', 'CLI002', 'SN002', '李四', 'CARD002', '儿科', '李医生', 150.00, '0', '患者未提供必要检查报告', 5, '1'),
 ('ORD003', 'CLI003', 'SN003', '王五', 'CARD003', '妇科', '王医生', 120.00, '0', '咨询内容与科室不符', 8, '2'),
 ('ORD004', 'CLI004', 'SN004', '赵六', 'CARD004', '内科', '张医生', 80.00, '1', NULL, 20, '3');
+GO
 
--- 插入黑名单测试数据
+-- 插入黑名单数据
 INSERT INTO blacklist (black_id, user_id, patient_id, reason, create_time, enable_flag) VALUES
-('BLK001', 'DOC001', 'PAT002', '患者多次发送骚扰信息', NOW(), '0'),
-('BLK002', 'DOC002', 'PAT003', '患者无理取闹', DATE_SUB(NOW(), INTERVAL 3 DAY), '0');
+('BLK001', 'DOC001', 'PAT002', '患者多次发送骚扰信息', GETDATE(), '0'),
+('BLK002', 'DOC002', 'PAT003', '患者无理取闹', DATEADD(DAY, -3, GETDATE()), '0');
+GO
+
+-- ==================== 验证数据 ====================
+PRINT '========== 表创建完成，验证数据 ==========';
+GO
+
+SELECT 'users表' AS TableName, COUNT(*) AS RowCount FROM users
+UNION ALL
+SELECT 'patient表', COUNT(*) FROM patient
+UNION ALL
+SELECT 'clinic_master表', COUNT(*) FROM clinic_master
+UNION ALL
+SELECT 'clinic_orders表', COUNT(*) FROM clinic_orders
+UNION ALL
+SELECT 'blacklist表', COUNT(*) FROM blacklist;
+GO
+
+-- 查看 users 表数据
+SELECT * FROM users;
+GO
+
+-- 查看 blacklist 表数据
+SELECT * FROM blacklist;
+GO
